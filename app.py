@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, redirect, url_for
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -46,8 +46,8 @@ def get_completion(prompt):
 
 def soup(url):
     try:
-        driver.get(url)
-        webpage = BeautifulSoup(driver.page_source, "html.parser")
+        driver.get(url)     # Fetch webpage using Selenium
+        webpage = BeautifulSoup(driver.page_source, "html.parser")  # Initialize BeautifulSoup
         text_elements = webpage.find_all(["p", "span", "div", "h1", "h2", "h3", "h4", "li"], limit=750) # Limit the elements as AI has limited input tokens
         
         if not text_elements:
@@ -70,7 +70,8 @@ def soup(url):
         return " ".join(found_texts[:750])  # Convert to string
 
     except Exception as e:
-        return f"Error: {str(e)}" 
+        print(f"Error: {str(e)}")
+        return None
        
 def send_email(to_email, url, chatgpt_response):
     try:
@@ -125,20 +126,30 @@ def save_to_csv(email, website, status, filename="registrations.csv"):  # CSV in
     
 @app.route('/', methods=["GET", "POST"])
 def sign_up():
-    if request.method == "POST":
+    if request.method == "POST":    # Execute only if a POST request is received
         email = request.form.get("email")
         website = request.form.get("website")
         
         found_texts = soup(website)
-        if not found_texts.strip():
-            print("Invalid website")
+        if found_texts is None or not found_texts.strip():
+            return redirect(url_for("invalid"))
         else:
             chatgpt_response = get_completion(found_texts)
-            print(chatgpt_response)
             send_email(email, website, chatgpt_response)
             save_to_csv(email, website, chatgpt_response)
 
-    return render_template('index.html')
+        return redirect(url_for("end"))
+    
+    return render_template("index.html")
+
+
+@app.route("/end")
+def end():
+    return render_template("thanks.html")
+
+@app.route("/invalid")
+def invalid():
+    return render_template("invalid.html")
 
 def close_driver():
     global driver
